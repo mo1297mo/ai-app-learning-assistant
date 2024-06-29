@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.vectorstores import Qdrant
@@ -167,50 +167,50 @@ async def query_index(request: Request, input_query: UserQuery):
     context = relevant_docs[0].page_content
     filled_prompt = QA_CHAIN_PROMPT.format(question=question, context=context)
 
-    async def stream_response_generator():
-        max_retries = 3
-        retries = 0
-        while retries < max_retries:
-            try:
-                async with httpx.AsyncClient() as client:
-                    async with client.stream(
-                        "POST",
-                        "https://api.openai.com/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-                        json={
-                            "model": "gpt-3.5-turbo",
-                            "messages": [
-                                {"role": "system", "content": "You are a helpful assistant."},
-                                {"role": "user", "content": filled_prompt}
-                            ],
-                            "stream": True
-                        }
-                    ) as response:
-                        async for chunk in response.aiter_bytes():
-                            decoded_chunk = chunk.decode("utf-8")
-                            for line in decoded_chunk.splitlines():
-                                if line.startswith("data: "):
-                                    data = line[len("data: "):]
-                                    if data.strip() == "[DONE]":
-                                        return
-                                    else:
-                                        try:
-                                            json_data = json.loads(data)
-                                            if "choices" in json_data:
-                                                choice = json_data["choices"][0]
-                                                if "delta" in choice and "content" in choice["delta"]:
-                                                    yield choice["delta"]["content"]
-                                        except json.JSONDecodeError:
-                                            continue
-                            await asyncio.sleep(0.1)  # Adjust sleep interval
-                return  # Successfully finished streaming
-            except httpx.StreamClosed:
-                retries += 1
-                logger.error(f"Stream was closed unexpectedly. Retry {retries}/{max_retries}.")
-
-        yield "Stream closed unexpectedly after multiple retries."
-
     if model_choice == "gpt":
+        async def stream_response_generator():
+            max_retries = 3
+            retries = 0
+            while retries < max_retries:
+                try:
+                    async with httpx.AsyncClient() as client:
+                        async with client.stream(
+                            "POST",
+                            "https://api.openai.com/v1/chat/completions",
+                            headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                            json={
+                                "model": "gpt-3.5-turbo",
+                                "messages": [
+                                    {"role": "system", "content": "You are a helpful assistant."},
+                                    {"role": "user", "content": filled_prompt}
+                                ],
+                                "stream": True
+                            }
+                        ) as response:
+                            async for chunk in response.aiter_bytes():
+                                decoded_chunk = chunk.decode("utf-8")
+                                for line in decoded_chunk.splitlines():
+                                    if line.startswith("data: "):
+                                        data = line[len("data: "):]
+                                        if data.strip() == "[DONE]":
+                                            return
+                                        else:
+                                            try:
+                                                json_data = json.loads(data)
+                                                if "choices" in json_data:
+                                                    choice = json_data["choices"][0]
+                                                    if "delta" in choice and "content" in choice["delta"]:
+                                                        yield choice["delta"]["content"]
+                                            except json.JSONDecodeError:
+                                                continue
+                                await asyncio.sleep(0.1)  # Adjust sleep interval
+                    return  # Successfully finished streaming
+                except httpx.StreamClosed:
+                    retries += 1
+                    logger.error(f"Stream was closed unexpectedly. Retry {retries}/{max_retries}.")
+
+            yield "Stream closed unexpectedly after multiple retries."
+
         return StreamingResponse(
             stream_response_generator(),
             media_type="text/event-stream"
@@ -218,7 +218,7 @@ async def query_index(request: Request, input_query: UserQuery):
     else:
         response = await qa_chain.acall({"input_documents": relevant_docs, "question": question})
         logger.info(response)  # Log the response to inspect its structure
-        return {"answer": response.get('result', 'No answer found')}
+        return JSONResponse({"answer": response.get('result', 'No answer found')})
 
 
 @qa_router.post("/ask1")
@@ -257,23 +257,3 @@ def insert_into_vectordb(documents: List[Document], filename: str):
     for document in documents:
         document.metadata["source"] = filename
     qdrant_vectordb.add_documents(documents)
-
-
-async def send_post_request():
-    url = "http://localhost:11434/api/generate"
-    data = {
-        "model": "llama2",
-        "prompt": "What is the capital of United States?"
-    }
-    headers = {'Content-Type': 'application/json'}
-
-    try:
-        response = requests.post(url, data=json.dumps(data), headers=headers)
-        if response.status_code == 200:
-            response_data = response.json()
-            logger.info(response_data)
-            return response_data
-        else:
-            return {"error": f"Request failed with status code {response.status_code}"}
-    except requests.exceptions.RequestException as e:
-        return {"error": f"Request exception: {str(e)}"}

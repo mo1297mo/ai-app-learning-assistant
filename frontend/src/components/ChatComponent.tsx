@@ -54,25 +54,39 @@ const Chat: React.FC = () => {
         throw new Error('Failed to fetch response from the server.');
       }
 
-      // Process the streaming response
-      const reader = response.body?.getReader();
-      if (reader) {
-        const decoder = new TextDecoder('utf-8');
-        let result = '';
+      if (modelChoice === 'gpt') {
+        // Process the streaming response for GPT
+        const reader = response.body?.getReader();
+        if (reader) {
+          const decoder = new TextDecoder('utf-8');
+          let result = '';
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-          result += decoder.decode(value);
-          setMessages((prevMessages) => [
-            ...prevMessages.slice(0, -1), // Remove the 'Loading...' message
-            { text: result, isUser: false },
-          ]);
+            result += decoder.decode(value);
+            setMessages((prevMessages) => [
+              ...prevMessages.slice(0, -1), // Remove the 'Loading...' message
+              { text: result, isUser: false },
+            ]);
+          }
         }
+      } else {
+        // Handle the complete response for Llama2
+        const data = await response.json();
+        const answer = data.answer;
+        setMessages((prevMessages) => [
+          ...prevMessages.slice(0, -1), // Remove the 'Loading...' message
+          { text: answer, isUser: false },
+        ]);
       }
     } catch (error) {
       console.error('Error fetching and streaming response:', error);
+      setMessages((prevMessages) => [
+        ...prevMessages.slice(0, -1), // Remove the 'Loading...' message
+        { text: 'Error: Failed to fetch response from the server.', isUser: false },
+      ]);
     } finally {
       setLoading(false);
     }
