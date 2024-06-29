@@ -14,7 +14,6 @@ interface Message {
 const Chat: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
-  const [streamedData, setStreamedData] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -31,11 +30,8 @@ const Chat: React.FC = () => {
 
   const handleSubmit = async () => {
     if (inputValue.trim() === '') return;
-    setMessages([...messages, { text: inputValue, isUser: true }]);
-    setMessages((prevMessages) => [
-      ...prevMessages,
-      { text: 'Loading...', isUser: false },
-    ]);
+    const userMessage = { text: inputValue, isUser: true };
+    setMessages((prevMessages) => [...prevMessages, userMessage, { text: 'Loading...', isUser: false }]);
     setInputValue('');
     setLoading(true);
 
@@ -45,7 +41,7 @@ const Chat: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ question: inputValue }),
+        body: JSON.stringify({ question: inputValue, model_choice: 'gpt' }), // Assuming you want to use 'llama2'
       });
 
       if (!response.ok) {
@@ -56,22 +52,22 @@ const Chat: React.FC = () => {
       const reader = response.body?.getReader();
       if (reader) {
         const decoder = new TextDecoder('utf-8');
+        let result = '';
 
         while (true) {
           const { done, value } = await reader.read();
+          if (done) break;
 
-          if (done) {
-            break;
-          }
-
-          const text = decoder.decode(value);
-          setStreamedData((prevData) => prevData + text);
+          result += decoder.decode(value);
+          setMessages((prevMessages) => [
+            ...prevMessages.slice(0, -1), // Remove the 'Loading...' message
+            { text: result, isUser: false },
+          ]);
         }
       }
     } catch (error) {
       console.error('Error fetching and streaming response:', error);
     } finally {
-      setStreamedData('');
       setLoading(false);
     }
   };
@@ -82,15 +78,6 @@ const Chat: React.FC = () => {
     }
   }, [messages]);
 
-  useEffect(() => {
-    if (streamedData !== '') {
-      setMessages((prevMessages) => [
-        ...prevMessages.slice(0, -1), // Remove the loading message
-        { text: streamedData, isUser: false },
-      ]);
-    }
-  }, [streamedData]);
-
   return (
     <Flex gap="middle" vertical style={{ padding: '24px' }}>
       <List
@@ -98,9 +85,7 @@ const Chat: React.FC = () => {
         size="large"
         dataSource={messages}
         renderItem={(item, index) => (
-          <List.Item
-            className={clsx(item.isUser ? 'user-message' : 'ai-message')}
-          >
+          <List.Item className={clsx(item.isUser ? 'user-message' : 'ai-message')}>
             <Message text={item.text} isUser={item.isUser} />
           </List.Item>
         )}

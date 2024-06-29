@@ -133,26 +133,32 @@ async def query_index(request: Request, input_query: UserQuery):
     filled_prompt = QA_CHAIN_PROMPT.format(question=question, context=context)
 
     if model_choice == "gpt":
-        response = client.chat.completions.create(model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": filled_prompt}
-        ],
-        stream=True)
+        response = await client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": filled_prompt}
+            ],
+            stream=True
+        )
 
-        def stream_response_generator():
-            for chunk in response:
-                if chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
-                time.sleep(1)
+        async def stream_response_generator():
+            async for chunk in response:
+                if hasattr(chunk, 'choices') and len(chunk.choices) > 0:
+                    choice = chunk.choices[0]
+                    if hasattr(choice.delta, 'content') and choice.delta.content:
+                        yield choice.delta.content
+                await asyncio.sleep(0.1)  # Adjust sleep interval
 
         return StreamingResponse(
-            content=stream_response_generator(),
+            stream_response_generator(),
             media_type="text/event-stream"
         )
     else:
         response = await qa_chain.acall({"input_documents": relevant_docs, "question": question})
-        return {"answer": response.output_text}
+        logger.info(response)  # Log the response to inspect its structure
+        return {"answer": response.get('result', 'No answer found')}
+
 
 
 @qa_router.post("/ask1")
