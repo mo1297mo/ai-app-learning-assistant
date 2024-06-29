@@ -24,7 +24,9 @@ import requests
 import asyncio
 import httpx
 import time
-import openai
+from openai import OpenAI
+
+client = OpenAI(api_key=settings.openai_api_key)
 
 logger = structlog.get_logger()
 
@@ -131,20 +133,17 @@ async def query_index(request: Request, input_query: UserQuery):
     filled_prompt = QA_CHAIN_PROMPT.format(question=question, context=context)
 
     if model_choice == "gpt":
-        openai.api_key = settings.openai_api_key
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": filled_prompt}
-            ],
-            stream=True
-        )
+        response = client.chat.completions.create(model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": filled_prompt}
+        ],
+        stream=True)
 
         def stream_response_generator():
             for chunk in response:
-                if chunk.choices[0].delta.get("content"):
-                    yield chunk.choices[0].delta["content"]
+                if chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
                 time.sleep(1)
 
         return StreamingResponse(
@@ -153,7 +152,7 @@ async def query_index(request: Request, input_query: UserQuery):
         )
     else:
         response = await qa_chain.acall({"input_documents": relevant_docs, "question": question})
-        return {"answer": response['output_text']}
+        return {"answer": response.output_text}
 
 
 @qa_router.post("/ask1")
