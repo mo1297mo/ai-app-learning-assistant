@@ -132,37 +132,58 @@ async def query_index(request: Request, input_query: UserQuery):
     context = relevant_docs[0].page_content
     filled_prompt = QA_CHAIN_PROMPT.format(question=question, context=context)
 
+    async def stream_response_generator():
+        max_retries = 3
+        retries = 0
+        while retries < max_retries:
+            try:
+                async with httpx.AsyncClient() as client:
+                    async with client.stream(
+                        "POST",
+                        "https://api.openai.com/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                        json={
+                            "model": "gpt-3.5-turbo",
+                            "messages": [
+                                {"role": "system", "content": "You are a helpful assistant."},
+                                {"role": "user", "content": filled_prompt}
+                            ],
+                            "stream": True
+                        }
+                    ) as response:
+                        async for chunk in response.aiter_bytes():
+                            decoded_chunk = chunk.decode("utf-8")
+                            for line in decoded_chunk.splitlines():
+                                if line.startswith("data: "):
+                                    data = line[len("data: "):]
+                                    if data.strip() == "[DONE]":
+                                        return
+                                    else:
+                                        try:
+                                            json_data = json.loads(data)
+                                            if "choices" in json_data:
+                                                choice = json_data["choices"][0]
+                                                if "delta" in choice and "content" in choice["delta"]:
+                                                    yield choice["delta"]["content"]
+                                        except json.JSONDecodeError:
+                                            continue
+                            await asyncio.sleep(0.1)  # Adjust sleep interval
+                return  # Successfully finished streaming
+            except httpx.StreamClosed:
+                retries += 1
+                logger.error(f"Stream was closed unexpectedly. Retry {retries}/{max_retries}.")
+
+        yield "Stream closed unexpectedly after multiple retries."
+
     if model_choice == "gpt":
-        async with httpx.AsyncClient() as client:
-            response = client.stream(
-                "POST",
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-                json={
-                    "model": "gpt-3.5-turbo",
-                    "messages": [
-                        {"role": "system", "content": "You are a helpful assistant."},
-                        {"role": "user", "content": filled_prompt}
-                    ],
-                    "stream": True
-                }
-            )
-
-            async def stream_response_generator():
-                async for chunk in response.aiter_text():
-                    if chunk:
-                        yield chunk
-                    await asyncio.sleep(0.1)  # Adjust sleep interval
-
-            return StreamingResponse(
-                stream_response_generator(),
-                media_type="text/event-stream"
-            )
+        return StreamingResponse(
+            stream_response_generator(),
+            media_type="text/event-stream"
+        )
     else:
         response = await qa_chain.acall({"input_documents": relevant_docs, "question": question})
         logger.info(response)  # Log the response to inspect its structure
         return {"answer": response.get('result', 'No answer found')}
-
 
 
 
