@@ -133,31 +133,36 @@ async def query_index(request: Request, input_query: UserQuery):
     filled_prompt = QA_CHAIN_PROMPT.format(question=question, context=context)
 
     if model_choice == "gpt":
-        response = await client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": filled_prompt}
-            ],
-            stream=True
-        )
+        async with httpx.AsyncClient() as client:
+            response = client.stream(
+                "POST",
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                json={
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": filled_prompt}
+                    ],
+                    "stream": True
+                }
+            )
 
-        async def stream_response_generator():
-            async for chunk in response:
-                if hasattr(chunk, 'choices') and len(chunk.choices) > 0:
-                    choice = chunk.choices[0]
-                    if hasattr(choice.delta, 'content') and choice.delta.content:
-                        yield choice.delta.content
-                await asyncio.sleep(0.1)  # Adjust sleep interval
+            async def stream_response_generator():
+                async for chunk in response.aiter_text():
+                    if chunk:
+                        yield chunk
+                    await asyncio.sleep(0.1)  # Adjust sleep interval
 
-        return StreamingResponse(
-            stream_response_generator(),
-            media_type="text/event-stream"
-        )
+            return StreamingResponse(
+                stream_response_generator(),
+                media_type="text/event-stream"
+            )
     else:
         response = await qa_chain.acall({"input_documents": relevant_docs, "question": question})
         logger.info(response)  # Log the response to inspect its structure
         return {"answer": response.get('result', 'No answer found')}
+
 
 
 
