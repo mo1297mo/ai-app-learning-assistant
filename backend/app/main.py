@@ -1,17 +1,14 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import uvicorn
+from api_v1.routers.rag import qa_router
 
-
-
-# Create FastAPI app
 app = FastAPI(
     title="AI Starter Kit backend API",
     docs_url="/docs"
 )
 
-# Set CORS origins
+# CORS settings
 origins = [
     "http://localhost:8000",
     "http://localhost:3000",
@@ -19,7 +16,6 @@ origins = [
     "http://127.0.0.1:3000",
 ]
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -28,14 +24,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Define a simple root endpoint
+# Root endpoint
 @app.get("/")
 async def root(request: Request):
     return {"message": "Server is up and running!"}
 
-# Include your routers
+# Include QA router
 app.include_router(qa_router, prefix="/api/v1", tags=["QA"])
 
-# Run the application
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", reload=True, port=8000)
