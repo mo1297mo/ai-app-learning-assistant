@@ -24,9 +24,9 @@ function App() {
     <div className="App">
       <Flex vertical>
         <div style={{ margin: 'auto', textAlign: 'left' }}>
-          <Title> Chat with Your Documents Locally</Title>
+          <Title> Chat with your project or assignment document. Or any other document</Title>
           <Paragraph style={{ fontSize: '18px' }}>
-            You can upload PDF files and start asking questions about them.
+            You can upload PDF files and start asking questions about them. The App will Automatically save deadlines via Google Calendar API
           </Paragraph>
         </div>
         <FileUpload />

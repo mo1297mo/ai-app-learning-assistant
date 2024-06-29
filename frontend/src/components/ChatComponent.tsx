@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Input, List, Button, Flex, Row, Col } from 'antd';
+import { Input, List, Button, Flex, Row, Col, Select } from 'antd';
 import clsx from 'clsx';
 import Message from './Message';
 import './styles.css';
 
 const { TextArea } = Input;
+const { Option } = Select;
 
 interface Message {
   text: string;
@@ -15,10 +16,15 @@ const Chat: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState<boolean>(false);
+  const [modelChoice, setModelChoice] = useState<string>('gpt'); // Default to ChatGPT
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(e.target.value);
+  };
+
+  const handleModelChange = (value: string) => {
+    setModelChoice(value);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -41,7 +47,7 @@ const Chat: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ question: inputValue, model_choice: 'gpt' }), // Assuming you want to use 'llama2'
+        body: JSON.stringify({ question: inputValue, model_choice: modelChoice }),
       });
 
       if (!response.ok) {
@@ -93,6 +99,10 @@ const Chat: React.FC = () => {
       <div ref={chatEndRef} />
       <Row gutter={0}>
         <Col flex="auto">
+          <Select defaultValue={modelChoice} onChange={handleModelChange} style={{ width: '100%', marginBottom: '10px' }}>
+            <Option value="gpt">ChatGPT</Option>
+            <Option value="llama2">Llama2</Option>
+          </Select>
           <div
             style={{
               width: '100%',
