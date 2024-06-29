@@ -16,6 +16,7 @@ from qdrant_client.http.models import Distance, VectorParams
 from config import settings
 from data_models.schemas import UserQuery
 from typing import List, Dict, AsyncGenerator
+from datetime import datetime, timedelta
 
 import tempfile
 import structlog
@@ -23,7 +24,9 @@ import json
 import requests
 import asyncio
 import httpx
-import time
+import os
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 from openai import OpenAI
 
 client = OpenAI(api_key=settings.openai_api_key)
@@ -95,6 +98,26 @@ def get_qa_chain(model_choice: str):
         raise ValueError("Unsupported model choice. Choose 'llama2' or 'gpt'.")
 
 
+# Function to create a Google Calendar event
+def create_google_calendar_event(summary, description, start_time, end_time):
+    creds = Credentials(
+        token=None,
+        refresh_token=settings.google_refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=settings.google_client_id,
+        client_secret=settings.google_client_secret,
+        scopes=["https://www.googleapis.com/auth/calendar.events"]
+    )
+    service = build("calendar", "v3", credentials=creds)
+    event = {
+        "summary": summary,
+        "description": description,
+        "start": {"dateTime": start_time, "timeZone": "Europe/Berlin"},
+        "end": {"dateTime": end_time, "timeZone": "Europe/Berlin"},
+    }
+    event = service.events().insert(calendarId="primary", body=event).execute()
+    return event
+
 @qa_router.post('/upload')
 async def upload_file(request: Request, file: UploadFile):
     filename = file.filename
@@ -117,6 +140,18 @@ async def upload_file(request: Request, file: UploadFile):
 
         # Insert the text chunks into the vector database
         insert_into_vectordb(documents, filename)
+
+        # Extract deadlines or events and create Google Calendar events
+        for doc in documents:
+            content = doc.page_content
+            # Assuming the format for the deadline in the content is consistent
+            if "deadline" in content.lower():
+                summary = "Project Deadline"
+                description = ""
+                start_time = datetime.now().isoformat()
+                end_time = (datetime.now() + timedelta(hours=1)).isoformat()
+                create_google_calendar_event(summary, description, start_time, end_time)
+                logger.info(f"Created calendar event for content: Project Deadline")
 
     return {"filename": filename, "status": "success"}
 
@@ -184,7 +219,6 @@ async def query_index(request: Request, input_query: UserQuery):
         response = await qa_chain.acall({"input_documents": relevant_docs, "question": question})
         logger.info(response)  # Log the response to inspect its structure
         return {"answer": response.get('result', 'No answer found')}
-
 
 
 @qa_router.post("/ask1")

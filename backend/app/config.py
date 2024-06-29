@@ -13,7 +13,10 @@ class Settings(BaseSettings):
     qdrant_collection_name: str = 'qa_collection'
     embedding_settings: EmbeddingSettings = EmbeddingSettings()
     text_splitter: dict = {"chunk_size": 100, "chunk_overlap": 20}
-    openai_api_key: str | None = None  # Add this line to include OpenAI API key
+    openai_api_key: str | None = None
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    google_refresh_token: str | None = None
 
     class Config:
         env_file = ".env"
