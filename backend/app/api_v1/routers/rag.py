@@ -65,7 +65,6 @@ QA_CHAIN_PROMPT = PromptTemplate(
     template=template,
 )
 
-
 # Qdrant initialization
 def initialize_qdrant(host: str, api_key: str, prefer_grpc: bool):
     qdrant_client = QdrantClient(host=host, api_key=api_key, prefer_grpc=prefer_grpc, https=False)
@@ -84,10 +83,8 @@ def initialize_qdrant(host: str, api_key: str, prefer_grpc: bool):
     create_collection(settings.qdrant_collection_name)
     return qdrant_client
 
-
 qdrant_client = initialize_qdrant(host=settings.qdrant_host, api_key=settings.qdrant_api_key, prefer_grpc=False)
 qdrant_vectordb = Qdrant(qdrant_client, settings.qdrant_collection_name, embedding_model)
-
 
 def get_qa_chain(model_choice: str):
     if model_choice == "llama2":
@@ -96,7 +93,6 @@ def get_qa_chain(model_choice: str):
         return None  # We will handle GPT separately
     else:
         raise ValueError("Unsupported model choice. Choose 'llama2' or 'gpt'.")
-
 
 # Function to create a Google Calendar event
 def create_google_calendar_event(summary, description, start_time, end_time):
@@ -154,7 +150,6 @@ async def upload_file(request: Request, file: UploadFile):
                 logger.info(f"Created calendar event for content: Project Deadline")
 
     return {"filename": filename, "status": "success"}
-
 
 @qa_router.post("/ask")
 async def query_index(request: Request, input_query: UserQuery):
@@ -218,8 +213,7 @@ async def query_index(request: Request, input_query: UserQuery):
     else:
         response = await qa_chain.acall({"input_documents": relevant_docs, "question": question})
         logger.info(response)  # Log the response to inspect its structure
-        return JSONResponse({"answer": response.get('result', 'No answer found')})
-
+        return JSONResponse({"answer": response.get('output_text', 'No answer found')})
 
 @qa_router.post("/ask1")
 async def query_index_another_approach(request: Request, input_query: UserQuery):
@@ -235,12 +229,10 @@ async def query_index_another_approach(request: Request, input_query: UserQuery)
     gen = create_generator(relevant_docs, question, qa_chain, stream_callback_handler)
     return StreamingResponse(gen, media_type="text/event-stream")
 
-
 async def run_call(relevant_docs, question: str, qa_chain, stream_callback_handler: AsyncIteratorCallbackHandler):
     qa_chain.callbacks = [stream_callback_handler]
     response = await qa_chain.acall({"input_documents": relevant_docs, "question": question})
     return response
-
 
 async def create_generator(relevant_docs, question: str, qa_chain,
                            stream_callback_handler: AsyncIteratorCallbackHandler):
@@ -251,7 +243,6 @@ async def create_generator(relevant_docs, question: str, qa_chain,
         yield token
 
     await run
-
 
 def insert_into_vectordb(documents: List[Document], filename: str):
     for document in documents:
