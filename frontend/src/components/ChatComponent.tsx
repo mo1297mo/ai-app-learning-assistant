@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Input, List, Button, Flex, Row, Col, Select } from 'antd';
-import clsx from 'clsx';
+import { Input, List, Button, Row, Col, Select } from 'antd';
 import Message from './Message';
 import './styles.css';
 
@@ -12,11 +11,11 @@ interface Message {
   isUser: boolean;
 }
 
-const Chat: React.FC = () => {
+const ChatComponent: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [modelChoice, setModelChoice] = useState<string>('gpt'); // Default to ChatGPT
+  const [modelChoice, setModelChoice] = useState<string>('gpt');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -55,7 +54,6 @@ const Chat: React.FC = () => {
       }
 
       if (modelChoice === 'gpt') {
-        // Process the streaming response for GPT
         const reader = response.body?.getReader();
         if (reader) {
           const decoder = new TextDecoder('utf-8');
@@ -67,24 +65,23 @@ const Chat: React.FC = () => {
 
             result += decoder.decode(value);
             setMessages((prevMessages) => [
-              ...prevMessages.slice(0, -1), // Remove the 'Loading...' message
+              ...prevMessages.slice(0, -1),
               { text: result, isUser: false },
             ]);
           }
         }
       } else {
-        // Handle the complete response for Llama2
         const data = await response.json();
         const answer = data.answer;
         setMessages((prevMessages) => [
-          ...prevMessages.slice(0, -1), // Remove the 'Loading...' message
+          ...prevMessages.slice(0, -1),
           { text: answer, isUser: false },
         ]);
       }
     } catch (error) {
       console.error('Error fetching and streaming response:', error);
       setMessages((prevMessages) => [
-        ...prevMessages.slice(0, -1), // Remove the 'Loading...' message
+        ...prevMessages.slice(0, -1),
         { text: 'Error: Failed to fetch response from the server.', isUser: false },
       ]);
     } finally {
@@ -99,72 +96,50 @@ const Chat: React.FC = () => {
   }, [messages]);
 
   return (
-    <Flex gap="middle" vertical style={{ padding: '24px' }}>
+    <div className="chat-container">
       <List
         itemLayout="horizontal"
         size="large"
         dataSource={messages}
-        renderItem={(item, index) => (
-          <List.Item className={clsx(item.isUser ? 'user-message' : 'ai-message')}>
+        renderItem={(item) => (
+          <List.Item className={item.isUser ? 'user-message' : 'ai-message'}>
             <Message text={item.text} isUser={item.isUser} />
           </List.Item>
         )}
       />
       <div ref={chatEndRef} />
-      <Row gutter={0}>
+      <Row gutter={16} className="input-row">
         <Col flex="auto">
-          <Select defaultValue={modelChoice} onChange={handleModelChange} style={{ width: '100%', marginBottom: '10px' }}>
+          <Select
+            defaultValue={modelChoice}
+            onChange={handleModelChange}
+            className="model-select"
+          >
             <Option value="gpt">ChatGPT</Option>
             <Option value="llama2">Llama2</Option>
           </Select>
-          <div
-            style={{
-              width: '100%',
-              margin: 'auto',
-              boxShadow: '0 0px 14px rgba(0, 0, 0, 0.1)',
-              borderRadius: '5px',
-            }}
-          >
+          <div className="input-container">
             <TextArea
-              className="no-outline"
+              className="message-input"
               value={inputValue}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Type your message here..."
+              placeholder="Ask your question here..."
               autoSize={{ minRows: 1, maxRows: 6 }}
-              style={{
-                minHeight: '60px',
-                maxHeight: '120px',
-                boxShadow: '0 0px 14px rgba(0, 0, 0, 0)',
-                boxSizing: 'border-box',
-                paddingLeft: '10px',
-                marginTop: '20px',
-                marginBottom: '20px',
-                paddingRight: '80px',
-                position: 'relative',
-                border: 'none',
-                outline: 'none !important',
-                resize: 'none',
-              }}
             />
             <Button
               type="primary"
               onClick={handleSubmit}
               loading={loading}
-              style={{
-                position: 'absolute',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                right: '20px',
-              }}
+              className="send-button"
             >
               Send
             </Button>
           </div>
         </Col>
       </Row>
-    </Flex>
+    </div>
   );
 };
 
-export default Chat;
+export default ChatComponent;

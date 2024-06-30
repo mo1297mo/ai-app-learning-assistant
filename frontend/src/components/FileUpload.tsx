@@ -3,6 +3,7 @@ import { Upload, message } from 'antd';
 import type { UploadProps } from 'antd/es/upload';
 import type { UploadFile } from 'antd/es/upload/interface';
 import { PlusOutlined } from '@ant-design/icons';
+import './styles.css';
 
 const uploadProps: UploadProps = {
   name: 'file',
@@ -10,23 +11,17 @@ const uploadProps: UploadProps = {
   beforeUpload(file: File) {
     const allowedTypes = ['application/pdf', 'text/plain'];
     if (!allowedTypes.includes(file.type)) {
-      // Show an error message to the user
-      message.error(`${file.name} file is not a valid file type.`);
+      message.error(`${file.name} is not a valid file type.`);
       return Upload.LIST_IGNORE;
     }
     return true;
   },
 };
 
-const FileUpload: React.FC<UploadProps> = ({ action }) => {
+const FileUpload: React.FC = () => {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
 
-  const handleChange: UploadProps['onChange'] = ({
-    file: info,
-    fileList: newFileList,
-  }) => {
-    console.log('file', File);
-
+  const handleChange: UploadProps['onChange'] = ({ file: info, fileList: newFileList }) => {
     if (info.status === 'done') {
       message.success(`${info.name} file uploaded successfully`);
     } else if (info.status === 'error') {
