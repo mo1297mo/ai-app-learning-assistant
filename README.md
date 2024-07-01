@@ -11,11 +11,13 @@ This project is a web application that allows users to upload PDF files and chat
 - **Backend**
   - FastAPI
   - Python
-  - HuggingFace
-  - Qdrant
-  - Google Calendar API
+  - HuggingFace (Embedding Model)
+  - Google Calendar API (ChatGPT Assistant)
   - OpenAI API
   - Llama2
+
+- **Vector Database**
+  - Qdrant
 
 ## Features
 

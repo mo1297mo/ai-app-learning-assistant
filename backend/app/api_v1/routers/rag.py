@@ -17,6 +17,7 @@ from config import settings
 from data_models.schemas import UserQuery
 from typing import List, Dict, AsyncGenerator
 from datetime import datetime, timedelta
+from dateutil.parser import parse as parse_date
 
 import tempfile
 import structlog
@@ -114,6 +115,45 @@ def create_google_calendar_event(summary, description, start_time, end_time):
     event = service.events().insert(calendarId="primary", body=event).execute()
     return event
 
+# Function to handle assistant's response for creating a calendar event
+async def handle_calendar_event_request(filled_prompt: str):
+    assistant_prompt = f"The user wants to create a calendar event. Extract the event details from the following input in JSON format with keys: summary, description, start_time, end_time {filled_prompt}"
+
+    response = client.chat.completions.create(
+        model="gpt-4-turbo",
+        messages=[
+            {
+                "role": "system",
+                "content": "Extract the event details from the user's input in JSON format with keys: summary, description, start_time, end_time."
+            },
+            {
+                "role": "user",
+                "content": assistant_prompt
+            }
+        ],
+        temperature=0.5,
+    )
+
+    event_details = response.choices[0].message.content.strip()
+    logger.info(f"Event details received from assistant: {event_details}")
+    # Assuming the response is in JSON format with keys: summary, description, start_time, end_time
+    try:
+        event_data = json.loads(event_details)
+
+        summary = event_data.get("summary")
+        description = event_data.get("description")
+        start_time = parse_date(event_data.get("start_time")).isoformat()
+        end_time = parse_date(event_data.get("end_time")).isoformat()
+
+        logger.info(f"Parsed event data: {event_data}")
+
+        create_google_calendar_event(summary, description, start_time, end_time)
+        return {"status": "Event created successfully"}
+    except json.JSONDecodeError:
+        return {"status": "Failed to parse event details"}
+    except Exception as e:
+        return {"status": f"Failed to create event: {str(e)}"}
+
 @qa_router.post('/upload')
 async def upload_file(request: Request, file: UploadFile):
     filename = file.filename
@@ -137,18 +177,6 @@ async def upload_file(request: Request, file: UploadFile):
         # Insert the text chunks into the vector database
         insert_into_vectordb(documents, filename)
 
-        # Extract deadlines or events and create Google Calendar events
-        for doc in documents:
-            content = doc.page_content
-            # Assuming the format for the deadline in the content is consistent
-            if "deadline" in content.lower():
-                summary = "Project Deadline"
-                description = ""
-                start_time = datetime.now().isoformat()
-                end_time = (datetime.now() + timedelta(hours=1)).isoformat()
-                create_google_calendar_event(summary, description, start_time, end_time)
-                logger.info(f"Created calendar event for content: Project Deadline")
-
     return {"filename": filename, "status": "success"}
 
 @qa_router.post("/ask")
@@ -161,6 +189,14 @@ async def query_index(request: Request, input_query: UserQuery):
     logger.info(f"======{relevant_docs}")
     context = relevant_docs[0].page_content
     filled_prompt = QA_CHAIN_PROMPT.format(question=question, context=context)
+
+    if "deadline" in question.lower() or "calendar" in question.lower():
+        event_response = await handle_calendar_event_request(filled_prompt)
+        if "status" in event_response and "successfully" in event_response["status"]:
+            response_message = "Event created successfully"
+        else:
+            response_message = event_response.get("status", "Failed to create event")
+        return JSONResponse({"answer": response_message})
 
     if model_choice == "gpt":
         async def stream_response_generator():
@@ -214,6 +250,7 @@ async def query_index(request: Request, input_query: UserQuery):
         response = await qa_chain.acall({"input_documents": relevant_docs, "question": question})
         logger.info(response)  # Log the response to inspect its structure
         return JSONResponse({"answer": response.get('output_text', 'No answer found')})
+
 
 @qa_router.post("/ask1")
 async def query_index_another_approach(request: Request, input_query: UserQuery):

@@ -53,31 +53,14 @@ const ChatComponent: React.FC = () => {
         throw new Error('Failed to fetch response from the server.');
       }
 
-      if (modelChoice === 'gpt') {
-        const reader = response.body?.getReader();
-        if (reader) {
-          const decoder = new TextDecoder('utf-8');
-          let result = '';
+      const data = await response.json();
+      const answer = data.answer || data.status || 'No response from the server';
 
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+      setMessages((prevMessages) => [
+        ...prevMessages.slice(0, -1),
+        { text: answer, isUser: false },
+      ]);
 
-            result += decoder.decode(value);
-            setMessages((prevMessages) => [
-              ...prevMessages.slice(0, -1),
-              { text: result, isUser: false },
-            ]);
-          }
-        }
-      } else {
-        const data = await response.json();
-        const answer = data.answer;
-        setMessages((prevMessages) => [
-          ...prevMessages.slice(0, -1),
-          { text: answer, isUser: false },
-        ]);
-      }
     } catch (error) {
       console.error('Error fetching and streaming response:', error);
       setMessages((prevMessages) => [
